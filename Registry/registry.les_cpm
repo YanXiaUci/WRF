@@ -29,3 +29,4 @@ rconfig  integer  cpm_ncells_h    namelist,dynamics  max_domains  3      -  "Num
 rconfig  integer  cpm_noff_h      namelist,dynamics  max_domains  0      -  "Number of cells from any outflow boundary to end the perturbations."
 rconfig  integer  cpm_ngc_v       namelist,dynamics  max_domains  1      -  "Number of grid points per cell in the z direction."
 rconfig  integer  cpm_noff_v      namelist,dynamics  max_domains  0      -  "Number of grid points from the domain bottom to start the perturbations."
+rconfig  real     spec_hfx        namelist,dynamics  max_domains  0.0    -  "Constant surface heat flux (W/m^2) for use with sf_sfclay_physics=1 in ideal conditions (spec_ideal=.true.)"  #MMC
