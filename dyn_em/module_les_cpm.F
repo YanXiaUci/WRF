@@ -105,7 +105,7 @@ CONTAINS
     DO j = j_start, j_end
        DO i = i_start,i_end
           
-          meso_hfx(i,j) = hfx(i,j)/(rho(i,kts,j)*cp)                          ! cp:specific heat capacity of dry air at constant pressure
+          meso_hfx(i,j) = hfx(i,j)/(rho(i,kts,j)*cp) + 0.61*290.*qfx(i,j)                        ! cp:specific heat capacity of dry air at constant pressure
           
        END DO
     END DO
