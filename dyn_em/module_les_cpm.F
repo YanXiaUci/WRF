@@ -64,7 +64,7 @@ CONTAINS
   
   !!====================================================================
   
-  SUBROUTINE force_down_meso_hfx( meso_hfx, hfx, rho,            &
+  SUBROUTINE force_down_meso_hfx( meso_hfx, hfx, rho,  qfx,      &
                                   ids, ide, jds, jde, kds, kde,  &
                                   ims, ime, jms, jme, kms, kme,  &
                                   its, ite, jts, jte, kts, kte   )
@@ -89,7 +89,7 @@ CONTAINS
     REAL, DIMENSION( ims:ime, jms:jme ),         INTENT( OUT  ) :: meso_hfx  ! Surface sensible heat flux for CPM.               [K*m/s]
     REAL, DIMENSION( ims:ime, jms:jme ),         INTENT( IN   ) :: hfx       ! Surface sensible heat flux.                       [W/m^2]
     REAL, DIMENSION( ims:ime, kms:kme, jms:jme), INTENT( IN   ) :: rho       ! Air density.                                      [kg/m^3]
-    
+    REAL, DIMENSION( ims:ime, jms:jme ),         INTENT( IN   ) :: qfx       ! Surface mositure flux.                      
     INTEGER :: i,j                                                           ! Loop index variables
     INTEGER :: i_start, i_end, j_start, j_end                                ! Loop start and end variables                
 
@@ -105,7 +105,7 @@ CONTAINS
     DO j = j_start, j_end
        DO i = i_start,i_end
           
-          meso_hfx(i,j) = hfx(i,j)/(rho(i,kts,j)*cp)
+          meso_hfx(i,j) = hfx(i,j)/(rho(i,kts,j)*cp)                          ! cp:specific heat capacity of dry air at constant pressure
           
        END DO
     END DO

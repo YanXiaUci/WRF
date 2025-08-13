@@ -537,7 +537,7 @@ BENCH_END(tke_diff_bc_tim)
             !$OMP PRIVATE ( ij )
             DO ij = 1 , grid%num_tiles
                
-               CALL force_down_meso_hfx( grid%meso_hfx, grid%hfx, grid%rho,  &   
+               CALL force_down_meso_hfx( grid%meso_hfx, grid%hfx, grid%rho, grid%qfx, &   
                                          ids, ide, jds, jde, kds, kde,       &
                                          ims, ime, jms, jme, kms, kme,       &
                                          grid%i_start(ij), grid%i_end(ij),   &
