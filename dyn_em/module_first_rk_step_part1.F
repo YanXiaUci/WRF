@@ -1723,7 +1723,9 @@ BENCH_END(shcu_driver_tim)
      &             ,v_upstream_y=grid%v_upstream_y                        &
      &             ,v_upstream_y_tend=grid%v_upstream_y_tend              &
      &             ,th_t_tend=grid%th_t_tend                              &
+     &             ,th_t_tend_slope=grid%th_t_tend_slope                  &
      &             ,qv_t_tend=grid%qv_t_tend                              &
+     &             ,qv_t_tend_slope=grid%qv_t_tend_slope                  &
      &             ,tau_x=grid%tau_x                                      &
      &             ,tau_x_tend=grid%tau_x_tend                            &
      &             ,tau_y=grid%tau_y                                      &
