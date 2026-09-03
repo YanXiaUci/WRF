@@ -1529,7 +1529,7 @@ The following are for observation nudging:
  /
 
  &scm
- scm_force                           = 1,       ! switch for single column forcing (=0 off)
+ scm_force                           = 1,       ! forcing switch: 0=off, 1=single column, 2=LASSO periodic LES
  scm_force_dx                        = 4000.    ! DX for SCM forcing (in meters)
  num_force_layers                    = 8        ! number of SCM input forcing layers
  scm_lu_index                        = 2        ! SCM landuse category (2 is dryland, cropland and pasture)

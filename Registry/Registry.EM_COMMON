@@ -241,8 +241,10 @@ state    real   v_upstream_x_tend   |     dyn_em      1      -      i3rh     "V_
 state    real   v_upstream_y        |     dyn_em      1      -      i3rh     "V_UPSTREAM_Y" "upstream v y-advection" "m s-2"
 state    real   v_upstream_y_tend   |     dyn_em      1      -      i3rh     "V_UPSTREAM_Y_TEND" "tendency upstream v y-advection" "m s-3"
 
-state    real   th_t_tend           |     dyn_em      1      -      i3rh     "TH_T_TEND" "tendency theta time" "K s-2"
-state    real   qv_t_tend           |     dyn_em      1      -      i3rh     "QV_T_TEND" "tendency qv time" "kg kg-1 s-1"
+state    real   th_t_tend           |     dyn_em      1      -      i3rh     "TH_T_TEND" "large-scale theta advection tendency" "K s-1"
+state    real   th_t_tend_slope     |     dyn_em      1      -      i3rh     "TH_T_TEND_SLOPE" "time slope of large-scale theta advection tendency" "K s-2"
+state    real   qv_t_tend           |     dyn_em      1      -      i3rh     "QV_T_TEND" "large-scale water-vapor advection tendency" "kg kg-1 s-1"
+state    real   qv_t_tend_slope     |     dyn_em      1      -      i3rh     "QV_T_TEND_SLOPE" "time slope of large-scale water-vapor advection tendency" "kg kg-1 s-2"
 
 state    real   th_largescale       |     dyn_em      1      -      i3rh     "TH_LARGESCALE" "SCM largescale theta" "K"
 state    real   th_largescale_tend  |     dyn_em      1      -      i3rh     "TH_LARGESCALE_TEND" "SCM tendency largescale theta" "K s-1"
@@ -2804,7 +2806,7 @@ rconfig   logical     obs_ipf_init        namelist,fdda            1            
 rconfig   integer     obs_scl_neg_qv_innov namelist,fdda           1              0       h        "obs_scl_neg_qv_innov" "Scale certain negative QV innovations"   ""
 
 # Single-column model (SCM)
-rconfig   integer scm_force               namelist,scm  1       0           rh   "scm_force"            "SCM forcing switch" ""
+rconfig   integer scm_force               namelist,scm  1       0           rh   "scm_force"            "Forcing switch: 0=off, 1=SCM, 2=LASSO periodic LES" ""
 rconfig   real    scm_force_dx            namelist,scm  1       4000.       rh   "scm_force_dx"         "DX for SCM forcing" "m"
 rconfig   integer num_force_layers        namelist,scm  1       8           rh   "num_force_layers"     "Number of SCM forcing layers" ""
 rconfig   integer scm_lu_index            namelist,scm  1       2           rh   "scm_lu_index"         "SCM landuse index" ""
@@ -3255,6 +3257,7 @@ package   omlscheme      sf_ocean_physics==1        -              state:tml,t0m
 package   pwp3dscheme    sf_ocean_physics==2        -              state:tml,t0ml,hml,h0ml,huml,hvml,tmoml,om_tmp,om_s,om_depth,om_u,om_v,om_lat,om_lon,om_ml,om_tini,om_sini
 
 package   scmopt         scm_force==1               -              state:z_force,z_force_tend,u_g,u_g_tend,v_g,v_g_tend,w_subs,w_subs_tend,th_upstream_x,th_upstream_x_tend,th_upstream_y,th_upstream_y_tend,qv_upstream_x,qv_upstream_x_tend,qv_upstream_y,qv_upstream_y_tend,u_upstream_x,u_upstream_x_tend,u_upstream_y,u_upstream_y_tend,v_upstream_x,v_upstream_x_tend,v_upstream_y,v_upstream_y_tend,tau_x,tau_x_tend,tau_y,tau_y_tend,th_largescale,th_largescale_tend,qv_largescale,qv_largescale_tend,ql_largescale,ql_largescale_tend,u_largescale,u_largescale_tend,v_largescale,v_largescale_tend,tau_largescale,tau_largescale_tend,ql_upstream_x,ql_upstream_x_tend,ql_upstream_y,ql_upstream_y_tend,t_soil_forcing_val,t_soil_forcing_tend,q_soil_forcing_val,q_soil_forcing_tend,tau_soil,soil_depth_force,th_t_tend,qv_t_tend
+package   lassolesopt    scm_force==2               -              state:z_force,z_force_tend,w_subs,w_subs_tend,th_t_tend,th_t_tend_slope,qv_t_tend,qv_t_tend_slope,u_largescale,u_largescale_tend,v_largescale,v_largescale_tend,tau_largescale,tau_largescale_tend
 
 package   prec_acc       prec_acc_opt==1            -              state:prec_acc_c,prec_acc_nc,snow_acc_nc
 package   bucketropt     bucketr_opt==1             -              state:i_rainc,i_rainnc

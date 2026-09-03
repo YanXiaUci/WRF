@@ -30,7 +30,8 @@ CONTAINS
                              , u_upstream_y, u_upstream_y_tend               &
                              , v_upstream_x, v_upstream_x_tend               &
                              , v_upstream_y, v_upstream_y_tend               &
-                             , th_t_tend, qv_t_tend                          &
+                             , th_t_tend, th_t_tend_slope                    &
+                             , qv_t_tend, qv_t_tend_slope                    &
                              , tau_x, tau_x_tend                             &
                              , tau_y, tau_y_tend                             &
                              ,th_largescale                                  &
@@ -106,8 +107,10 @@ CONTAINS
    REAL, DIMENSION(num_force_layers), INTENT (IN) :: u_upstream_y_tend
    REAL, DIMENSION(num_force_layers), INTENT (IN) :: v_upstream_x_tend
    REAL, DIMENSION(num_force_layers), INTENT (IN) :: v_upstream_y_tend
-   REAL, DIMENSION(num_force_layers), INTENT (IN) :: th_t_tend 
-   REAL, DIMENSION(num_force_layers), INTENT (IN) :: qv_t_tend  
+   REAL, DIMENSION(num_force_layers), INTENT (INOUT) :: th_t_tend
+   REAL, DIMENSION(num_force_layers), INTENT (INOUT) :: qv_t_tend
+   REAL, DIMENSION(num_force_layers), INTENT (IN) :: th_t_tend_slope
+   REAL, DIMENSION(num_force_layers), INTENT (IN) :: qv_t_tend_slope
    REAL, DIMENSION(num_force_layers), INTENT (IN) :: tau_x_tend
    REAL, DIMENSION(num_force_layers), INTENT (IN) :: tau_y_tend
 
@@ -180,7 +183,24 @@ CONTAINS
    REAL, DIMENSION(num_soil_layers) :: t_soil_tend, q_soil_tend
    REAL, DIMENSION(num_soil_layers) :: timescale_soil
 
-   IF ( scm_force .EQ. 0 ) return
+   IF ( scm_force .EQ. 2 ) THEN
+      CALL force_lasso_les(dt, num_force_layers                         &
+                        , z_force, z_force_tend                         &
+                        , w_subs, w_subs_tend                           &
+                        , th_t_tend, th_t_tend_slope                    &
+                        , qv_t_tend, qv_t_tend_slope                    &
+                        , u_largescale, u_largescale_tend               &
+                        , v_largescale, v_largescale_tend               &
+                        , tau_largescale, tau_largescale_tend           &
+                        , z, z_at_w, th, qv, u, v                       &
+                        , thten, qvten, uten, vten                      &
+                        , ids, ide, jds, jde, kds, kde                  &
+                        , ims, ime, jms, jme, kms, kme                  &
+                        , ips, ipe, jps, jpe, kps, kpe, kts, kte )
+      RETURN
+   ELSE IF ( scm_force .NE. 1 ) THEN
+      RETURN
+   END IF
  
 ! NOTES
 ! z is kts:kte
@@ -552,5 +572,167 @@ CONTAINS
     RETURN
 
    END SUBROUTINE force_scm
+
+!-----------------------------------------------------------------------
+! LASSO large-scale forcing for a horizontally periodic LES domain.
+! The horizontal advection tendencies and wind relaxation are uniform.
+! Subsidence is evaluated from each column's instantaneous vertical
+! gradients.  Domain means are reduced across MPI patches.
+!-----------------------------------------------------------------------
+   SUBROUTINE force_lasso_les(dt, num_force_layers                    &
+                            , z_force, z_force_tend                    &
+                            , w_subs, w_subs_tend                      &
+                            , th_adv, th_adv_tend                      &
+                            , qv_adv, qv_adv_tend                      &
+                            , u_ls, u_ls_tend, v_ls, v_ls_tend         &
+                            , tau_ls, tau_ls_tend                      &
+                            , z, z_at_w, th, qv, u, v                  &
+                            , thten, qvten, uten, vten                 &
+                            , ids, ide, jds, jde, kds, kde             &
+                            , ims, ime, jms, jme, kms, kme             &
+                            , ips, ipe, jps, jpe, kps, kpe, kts, kte )
+
+      USE module_init_utilities, ONLY : interp_0
+      USE module_dm, ONLY : wrf_dm_sum_reals
+      IMPLICIT NONE
+
+      INTEGER, INTENT(IN) :: num_force_layers
+      REAL, INTENT(IN) :: dt
+      REAL, DIMENSION(num_force_layers), INTENT(INOUT) :: z_force
+      REAL, DIMENSION(num_force_layers), INTENT(INOUT) :: w_subs
+      REAL, DIMENSION(num_force_layers), INTENT(INOUT) :: th_adv, qv_adv
+      REAL, DIMENSION(num_force_layers), INTENT(INOUT) :: u_ls, v_ls, tau_ls
+      REAL, DIMENSION(num_force_layers), INTENT(IN) :: z_force_tend
+      REAL, DIMENSION(num_force_layers), INTENT(IN) :: w_subs_tend
+      REAL, DIMENSION(num_force_layers), INTENT(IN) :: th_adv_tend, qv_adv_tend
+      REAL, DIMENSION(num_force_layers), INTENT(IN) :: u_ls_tend, v_ls_tend
+      REAL, DIMENSION(num_force_layers), INTENT(IN) :: tau_ls_tend
+
+      INTEGER, INTENT(IN) :: ids, ide, jds, jde, kds, kde              &
+                           , ims, ime, jms, jme, kms, kme              &
+                           , ips, ipe, jps, jpe, kps, kpe, kts, kte
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: z, z_at_w
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(IN) :: th, qv, u, v
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(INOUT) :: thten, qvten
+      REAL, DIMENSION(ims:ime,kms:kme,jms:jme), INTENT(INOUT) :: uten, vten
+
+      INTEGER :: i, j, k, its, ite, jts, jte
+      REAL :: global_count, dz, w_ifc
+      REAL :: lower_th, upper_th, lower_qv, upper_qv
+      REAL, DIMENSION(kms:kme) :: z_mean, u_mean, v_mean
+      REAL, DIMENSION(kms:kme) :: global_sum
+      REAL, DIMENSION(kms:kme) :: th_forcing, qv_forcing
+      REAL, DIMENSION(kms:kme) :: u_forcing, v_forcing
+      REAL, DIMENSION(kms:kme) :: tau_forcing
+
+      IF (num_force_layers .LT. 2) THEN
+         CALL wrf_error_fatal('LASSO LES forcing needs at least two vertical levels')
+      END IF
+
+      z_force = z_force + dt*z_force_tend
+      w_subs = w_subs + dt*w_subs_tend
+      th_adv = th_adv + dt*th_adv_tend
+      qv_adv = qv_adv + dt*qv_adv_tend
+      u_ls = u_ls + dt*u_ls_tend
+      v_ls = v_ls + dt*v_ls_tend
+      tau_ls = tau_ls + dt*tau_ls_tend
+
+      DO k = 2, num_force_layers
+         IF (z_force(k) .LE. z_force(k-1)) THEN
+            CALL wrf_error_fatal('LASSO LES forcing heights must increase monotonically')
+         END IF
+      END DO
+      IF (MINVAL(tau_ls) .LE. 0.0) THEN
+         CALL wrf_error_fatal('LASSO LES wind-relaxation time must be positive')
+      END IF
+
+      its = MAX(ips, ids)
+      ite = MIN(ipe, ide-1)
+      jts = MAX(jps, jds)
+      jte = MIN(jpe, jde-1)
+      global_count = REAL((ide-ids)*(jde-jds))
+      IF (global_count .LE. 0.0) THEN
+         CALL wrf_error_fatal('LASSO LES forcing found an empty periodic domain')
+      END IF
+
+      z_mean = 0.0
+      u_mean = 0.0
+      v_mean = 0.0
+      th_forcing = 0.0
+      qv_forcing = 0.0
+      u_forcing = 0.0
+      v_forcing = 0.0
+      tau_forcing = 0.0
+
+      DO k = kts, kte
+         DO j = jts, jte
+            DO i = its, ite
+               z_mean(k) = z_mean(k) + z(i,k,j)
+               u_mean(k) = u_mean(k) + u(i,k,j)
+               v_mean(k) = v_mean(k) + v(i,k,j)
+            END DO
+         END DO
+      END DO
+
+      CALL wrf_dm_sum_reals(z_mean(kts:kte),global_sum(kts:kte))
+      z_mean(kts:kte) = global_sum(kts:kte)/global_count
+      CALL wrf_dm_sum_reals(u_mean(kts:kte),global_sum(kts:kte))
+      u_mean(kts:kte) = global_sum(kts:kte)/global_count
+      CALL wrf_dm_sum_reals(v_mean(kts:kte),global_sum(kts:kte))
+      v_mean(kts:kte) = global_sum(kts:kte)/global_count
+
+      DO k = kts, kte
+         th_forcing(k) = interp_0(th_adv,z_force,z_mean(k),num_force_layers)
+         qv_forcing(k) = interp_0(qv_adv,z_force,z_mean(k),num_force_layers)
+         tau_forcing(k) = interp_0(tau_ls,z_force,z_mean(k),num_force_layers)
+         IF (tau_forcing(k) .LE. 0.0) THEN
+            CALL wrf_error_fatal(                                        &
+               'LASSO LES interpolated wind-relaxation time must be positive')
+         END IF
+         u_forcing(k) = (interp_0(u_ls,z_force,z_mean(k),num_force_layers) &
+                        - u_mean(k))                                      &
+                        / tau_forcing(k)
+         v_forcing(k) = (interp_0(v_ls,z_force,z_mean(k),num_force_layers) &
+                        - v_mean(k))                                      &
+                        / tau_forcing(k)
+      END DO
+
+      DO j = jts, jte
+         DO i = its, ite
+            DO k = kts, kte
+               lower_th = 0.0
+               lower_qv = 0.0
+               upper_th = 0.0
+               upper_qv = 0.0
+
+               IF (k .GT. kts) THEN
+                  dz = z(i,k,j)-z(i,k-1,j)
+                  IF (dz .LE. 0.0) CALL wrf_error_fatal(                 &
+                     'LASSO LES forcing encountered non-positive layer depth')
+                  w_ifc = interp_0(w_subs,z_force,z_at_w(i,k,j),num_force_layers)
+                  lower_th = -w_ifc*(th(i,k,j)-th(i,k-1,j))/dz
+                  lower_qv = -w_ifc*(qv(i,k,j)-qv(i,k-1,j))/dz
+               END IF
+
+               IF (k .LT. kte) THEN
+                  dz = z(i,k+1,j)-z(i,k,j)
+                  IF (dz .LE. 0.0) CALL wrf_error_fatal(                 &
+                     'LASSO LES forcing encountered non-positive layer depth')
+                  w_ifc = interp_0(w_subs,z_force,z_at_w(i,k+1,j),num_force_layers)
+                  upper_th = -w_ifc*(th(i,k+1,j)-th(i,k,j))/dz
+                  upper_qv = -w_ifc*(qv(i,k+1,j)-qv(i,k,j))/dz
+               END IF
+
+               thten(i,k,j) = thten(i,k,j) + th_forcing(k)              &
+                              + 0.5*(lower_th+upper_th)
+               qvten(i,k,j) = qvten(i,k,j) + qv_forcing(k)              &
+                              + 0.5*(lower_qv+upper_qv)
+               uten(i,k,j) = uten(i,k,j) + u_forcing(k)
+               vten(i,k,j) = vten(i,k,j) + v_forcing(k)
+            END DO
+         END DO
+      END DO
+
+   END SUBROUTINE force_lasso_les
 
 END MODULE module_force_scm
